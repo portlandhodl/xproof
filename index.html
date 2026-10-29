@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>xproof — prove two keys share a wallet, reveal nothing else</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c5cff'/><path d='M9 9l14 14M23 9L9 23' stroke='white' stroke-width='3.5' stroke-linecap='round'/></svg>" />
+<link rel="stylesheet" href="styles.css" />
+<script src="js/coi.js"></script>
+</head>
+<body>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<nav class="topbar">
+  <div class="brand"><span class="logo">x</span>xproof</div>
+  <div id="backendPill" class="pill pill-wait"><span class="dot"></span><span id="backendInfo">checking provers…</span></div>
+</nav>
+
+<header class="hero">
+  <div class="eyebrow">Zero-knowledge · BIP32 · runs in your browser</div>
+  <h1>Prove two keys share a wallet.<br /><span class="grad">Reveal nothing else.</span></h1>
+  <p class="lede">Show that any two child keys — <code>m/0/1</code> and <code>m/1/3</code>, or any depth you like —
+  descend from one xpub, without revealing the xpub, its chain code, or the derivation paths.</p>
+
+  <ol class="stepper" id="stepper">
+    <li data-step="1"><span>1</span>Wallet &amp; paths</li>
+    <li data-step="2"><span>2</span>Prove</li>
+    <li data-step="3"><span>3</span>Verify</li>
+  </ol>
+</header>
+
+<main>
+  <!-- STEP 1 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <section class="card" id="step1">
+    <div class="card-head">
+      <div class="num">1</div>
+      <div>
+        <h2>Wallet &amp; derivation paths</h2>
+        <p class="hint">A real BIP32 signet wallet (kept in this browser). Both children are derived from the <em>xpub side</em>
+        (public key + chain code only), exactly like a watch-only wallet. Pick any two non-hardened paths.</p>
+      </div>
+      <button id="btnGen" class="btn btn-primary">Generate wallet</button>
+    </div>
+    <details id="restoreBox" class="restore">
+      <summary>Restore a wallet from its seed</summary>
+      <div class="row">
+        <input id="restoreSeed" placeholder="seed hex (16–64 bytes)" spellcheck="false" />
+        <button id="btnRestore" class="btn">Restore</button>
+      </div>
+    </details>
+
+    <div id="walletOut" class="hidden">
+      <div class="secret-box">
+        <div class="secret-tag">🔒 secret witness — never shown to the verifier · saved in this browser (signet only — never put real funds here)</div>
+        <div class="kv"><span class="k">seed</span><code id="seedHex" class="wrap"></code></div>
+        <div class="kv"><span class="k">master tpub</span><code id="xpubStr" class="wrap"></code></div>
+      </div>
+
+      <div class="paths">
+        <label class="path-field a">
+          <span class="path-label"><i class="sw sw-a"></i>Path A <small>key you want to attest</small></span>
+          <div class="path-input"><span class="m">m/</span><input id="pathA" value="0/1" spellcheck="false" /></div>
+        </label>
+        <label class="path-field b">
+          <span class="path-label"><i class="sw sw-b"></i>Path B <small>key that spends on signet</small></span>
+          <div class="path-input"><span class="m">m/</span><input id="pathB" value="1/3" spellcheck="false" /></div>
+        </label>
+      </div>
+      <div class="presets">
+        <span class="dim">Try:</span>
+        <button class="chipbtn" data-a="0" data-b="1">m/0 ↔ m/1</button>
+        <button class="chipbtn" data-a="0/1" data-b="0/2">m/0/1 ↔ m/0/2</button>
+        <button class="chipbtn" data-a="0/1" data-b="1/3">m/0/1 ↔ m/1/3</button>
+        <button class="chipbtn" data-a="0" data-b="0/5/2">m/0 ↔ m/0/5/2</button>
+        <button class="chipbtn" data-a="3/1/4/1/5" data-b="2/7/1/8">deep: 5 vs 4 levels</button>
+      </div>
+      <div id="pathError" class="error hidden"></div>
+
+      <div class="tree-wrap"><svg id="tree" role="img" aria-label="derivation tree"></svg></div>
+
+      <div class="childgrid">
+        <div class="keycard a">
+          <div class="keycard-head"><i class="sw sw-a"></i>Key A <code id="pathALabel" class="pathtag"></code></div>
+          <div class="kv"><span class="k">pubkey</span><code id="pubA" class="wrap"></code></div>
+        </div>
+        <div class="keycard b">
+          <div class="keycard-head"><i class="sw sw-b"></i>Key B <code id="pathBLabel" class="pathtag"></code></div>
+          <div class="kv"><span class="k">pubkey</span><code id="pubB" class="wrap"></code></div>
+          <details class="kv-details"><summary>show private key</summary>
+            <code id="privB" class="wrap"></code>
+          </details>
+        </div>
+      </div>
+
+      <div class="signbox">
+        <h3 class="chain-title">Anchor key B on <span class="tag tag-violet">SIGNET</span>
+          <span class="dim">real test-network bitcoin · via <a href="https://mempool.space/signet" target="_blank" rel="noopener">mempool.space/signet</a></span></h3>
+
+        <div class="chainsteps">
+          <div class="cstep">
+            <div class="cstep-num">a</div>
+            <div class="cstep-body">
+              <strong>Deposit signet sats to key B</strong>
+              <div class="addrrow">
+                <code id="addrB" class="addr"></code>
+                <button id="btnCopyB" class="btn btn-sm">Copy</button>
+                <a id="linkB" class="btn btn-sm" target="_blank" rel="noopener">Explorer ↗</a>
+              </div>
+              <div class="dim">Get coins from a signet faucet (e.g. <a href="https://signetfaucet.com" target="_blank" rel="noopener">signetfaucet.com</a>,
+                <a href="https://alt.signetfaucet.com" target="_blank" rel="noopener">alt.signetfaucet.com</a>) — unconfirmed deposits are fine.</div>
+              <div class="balance"><span>Balance</span> <strong id="balB">—</strong> <span id="balBNote" class="dim"></span>
+                <button id="btnRefresh" class="btn btn-sm">Refresh</button></div>
+              <div class="dim">Key A's address (no funds needed): <code id="addrA" class="addr-sm"></code></div>
+            </div>
+          </div>
+          <div class="cstep">
+            <div class="cstep-num">b</div>
+            <div class="cstep-body">
+              <div><strong>Spend from key B</strong> <span class="dim">— signs a real P2WPKH transaction in your browser; the signature becomes the public anchor</span></div>
+              <div class="row">
+                <label class="grow"><span class="dim">send to (defaults to key B itself, so nothing new is linked on-chain)</span>
+                  <input id="spendDest" spellcheck="false" /></label>
+                <button id="btnSpend" class="btn btn-primary" disabled>Sign &amp; broadcast</button>
+              </div>
+              <div id="spendOut" class="hidden"></div>
+              <div id="spendError" class="error hidden"></div>
+            </div>
+          </div>
+        </div>
+
+        <details class="mockchain">
+          <summary>No signet sats? Use the offline mock chain instead</summary>
+          <div class="row">
+            <input id="signMsg" value="Pay 0.25 BTC to 1DemoRecipientAddress" />
+            <button id="btnSign" class="btn" disabled>Sign mock tx</button>
+          </div>
+          <ul id="chainLog" class="chainlog"></ul>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <section class="card private" id="step2">
+    <div class="card-head">
+      <div class="num">2</div>
+      <div>
+        <h2>Prover <span class="tag tag-amber">runs privately</span></h2>
+        <p class="hint">Witness: parent pubkey, chain code and both paths. The prover walks each path —
+        one HMAC-SHA512 and one point addition per level — and proves it did so correctly, revealing only
+        the two resulting keys. The same statement is implemented twice: a Noir circuit (in-browser) and an SP1
+        zkVM program (server). See <a href="https://github.com/portlandhodl/xproof/blob/main/SPEC.md">SPEC.md</a>.</p>
+      </div>
+    </div>
+
+    <div class="modes">
+      <div class="mode featured" id="modeWasm">
+        <div class="mode-head"><span class="tag tag-violet">ZK · IN YOUR BROWSER</span><span class="dim" id="wasmEst">WebAssembly</span></div>
+        <p><strong>Zero-knowledge</strong> UltraHonk proof of the same statement, generated by a Noir circuit compiled to
+        WebAssembly. Nothing leaves this tab. ~10 KB proof · paths up to depth 3.</p>
+        <button id="btnProveWasm" class="btn btn-primary" disabled>Prove in browser</button>
+      </div>
+      <div class="mode server-only hidden">
+        <div class="mode-head"><span class="tag tag-violet">ZK · GROTH16</span><span class="dim">server · ≈4 min</span></div>
+        <p>SP1 zkVM STARK wrapped in a Groth16 SNARK: <strong>zero-knowledge</strong>, 356 bytes, checkable by anyone
+        (or a smart contract) with just the vk hash.</p>
+        <button id="btnProveZk" class="btn" disabled>Prove on server</button>
+      </div>
+      <div class="mode server-only hidden">
+        <div class="mode-head"><span class="tag tag-green">SP1 STARK</span><span class="dim">server · ≈1–2 min</span></div>
+        <p>The raw SP1 compressed STARK (~1.3 MB). Sound, but not zero-knowledge on its own. Paths up to depth 16.</p>
+        <button id="btnProveReal" class="btn" disabled>Prove on server</button>
+      </div>
+      <div class="mode">
+        <div class="mode-head"><span class="tag tag-amber">SIMULATED</span><span class="dim">instant</span></div>
+        <p>Runs the real relation check and emits a Fiat-Shamir-shaped envelope. For exploring the flow; not a proof.</p>
+        <button id="btnProve" class="btn" disabled>Simulate</button>
+      </div>
+    </div>
+    <p id="serverNote" class="dim small">Self-hosting? Run the <code>xproof-host</code> server to also get SP1 STARK and
+    Groth16 provers (see README).</p>
+    <div id="depthNote" class="note hidden"></div>
+
+    <div id="realProgress" class="progress hidden">
+      <div class="progress-head"><span id="realStage">Proving…</span><span id="realElapsed" class="dim"></span></div>
+      <div class="progress-bar"><div id="realBar"></div></div>
+      <div id="realStatus" class="dim"></div>
+    </div>
+    <div id="realError" class="error hidden"></div>
+
+    <div id="realProofBox" class="hidden">
+      <h3>Public values bound by the proof <span class="dim">(this is all a verifier learns)</span></h3>
+      <pre id="realJournal" class="code"></pre>
+      <div class="row between">
+        <div id="realMeta" class="dim"></div>
+        <button id="btnDownload" class="btn btn-sm">Download proof</button>
+      </div>
+    </div>
+    <div id="relationTrace"></div>
+    <div id="proofBox" class="hidden">
+      <h3>Simulated proof object <span class="dim">(this — and only this — goes to the verifier)</span></h3>
+      <pre id="proofJson" class="code"></pre>
+    </div>
+  </section>
+
+  <!-- STEP 3 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <section class="card" id="step3">
+    <div class="card-head">
+      <div class="num">3</div>
+      <div>
+        <h2>Verifier</h2>
+        <p class="hint">Sees only the proof and the chain. Re-verifies the proof, the on-chain anchor,
+        context freshness, and scans the proof bytes for leaked witness material. Hit <em>Forge</em> to watch tampering get caught.</p>
+      </div>
+    </div>
+    <div class="row">
+      <label class="ctx"><span class="dim">session context</span><input id="ctx" /></label>
+      <span class="modebadge">proof loaded: <strong id="proofMode">none</strong></span>
+      <button id="btnTamper" class="btn btn-danger" disabled>Forge: tamper</button>
+      <button id="btnVerify" class="btn btn-primary" disabled>Verify proof</button>
+    </div>
+    <textarea id="verifyJson" spellcheck="false" placeholder="Generate a proof in step 2, or load / paste a proof file someone sent you."></textarea>
+    <div class="row">
+      <label class="btn btn-sm filebtn">Load proof file…<input id="proofFile" type="file" accept=".json,application/json" /></label>
+    </div>
+    <ul id="checkResults" class="checklist"></ul>
+    <div id="verdict" class="hidden"></div>
+  </section>
+
+  <!-- EXPLAINER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <section class="card" id="explainer">
+    <h2>Why this is the right shape</h2>
+    <p>BIP32 normal derivation is additive in the discrete log, one level at a time:
+    <code>K<sub>child</sub> = K + HMAC-SHA512(c, ser<sub>P</sub>(K) ‖ i)[0..32]·G</code>, with the new chain code
+    taken from the other half of the HMAC. A path like <code>m/1/3</code> just applies this twice. The chain code is a
+    <em>master linking secret</em>: revealing it (even for one child) links every descendant — so selective disclosure
+    must hide the HMACs inside a zero-knowledge proof.</p>
+    <div class="facts">
+      <div><strong>What a proof reveals</strong><span>The two child pubkeys and that one hidden xpub links them. The xpub, chain code and both paths are witnesses.</span></div>
+      <div><strong>Any shape of relationship</strong><span><code>m/0/1</code> vs <code>m/0/2</code> (siblings), <code>m/0/1</code> vs <code>m/1/3</code> (cousins), or <code>m/0</code> vs <code>m/0/5/2</code> (ancestor/descendant). Up to depth 3 in the browser, 16 on the server.</span></div>
+      <div><strong>Hardened vs normal</strong><span>Only normal steps are provable from an xpub witness — matching real wallets, where an account xpub derives receive/change children normally.</span></div>
+      <div><strong>Semantics</strong><span>Proves “the prover knows the linking xpub”. An auditor holding the xpub can too; add a parent-privkey check for spend-level ownership.</span></div>
+    </div>
+    <p class="dim small">Which proof to use: both <strong>ZK · in your browser</strong> (UltraHonk) and <strong>ZK · Groth16</strong>
+    hide the witness and are constant-size, so they don't hint at path depth; the in-browser circuit even does the same
+    work for every path shape. SP1's raw STARK is sound but not zero-knowledge on its own — use it for debugging only.</p>
+  </section>
+</main>
+
+<footer>xproof · the in-browser prover keeps your xpub in this tab · signet only, never real funds ·
+  <a href="https://github.com/portlandhodl/xproof/blob/main/SPEC.md">spec</a> · <a href="https://github.com/portlandhodl/xproof">source</a></footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

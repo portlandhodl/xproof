@@ -1,0 +1,16 @@
+[workspace]
+members = ["lib", "program", "script"]
+resolver = "2"
+
+# SP1 precompile patches: accelerate SHA-512 and secp256k1 field/point ops inside the zkVM.
+# Without these the same code still proves correctly, just ~10-50x slower.
+[patch.crates-io]
+# k256 accelerated for SP1 via the secp256k1 precompile (sp1-lib 6.10.0-compatible branch).
+k256 = { git = "https://github.com/sp1-patches/elliptic-curves", branch = "fakedev9999/release-6.10.0-k256" }
+# NOTE: official sha2 patches (a) accelerate SHA-256 only — BIP32 needs SHA-512 — and
+# (b) gate on riscv32 while this toolchain emits riscv64. So sha2 stays stock; the two
+# HMAC-SHA512 calls run in software (cost measured in CI below: negligible vs EC work).
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

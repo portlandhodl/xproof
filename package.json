@@ -1,0 +1,6 @@
+{
+  "name": "xproof-demo",
+  "private": true,
+  "type": "module",
+  "description": "xproof web app: plain static files, no runtime dependencies. The in-browser prover is built in noir/ (see README)."
+}

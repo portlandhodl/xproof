@@ -1,0 +1,12 @@
+{
+  "statement": "xproof-ownership-link-v1",
+  "proof_system": "UltraHonk (zero-knowledge, keccak transcript / verifierTarget=evm)",
+  "max_depth": 3,
+  "gates": 1757751,
+  "gates_dyadic_log2": 21,
+  "public_inputs": "key_a[33] ‖ key_b[33] ‖ context_hash[32] ‖ expires_at",
+  "noir": "1.0.0-rc.7",
+  "bb_js": "5.3.0",
+  "circuit_sha256": "a8ab772813d0c41aae7670bcf3f95ede3428ce7be9ca4a691cc178266f91edac",
+  "vk_sha256": "f931472bf5432928b952117100b6c1c359a72c33572c738ae9cdb6f3f8b8ff41"
+}

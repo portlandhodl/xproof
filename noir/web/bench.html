@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- Dev tool: benchmark the in-browser prover. Open /noir/web/bench.html?a=0/1&b=1/3 -->
+<meta charset="utf-8" />
+<title>xproof WASM prover bench</title>
+<script src="../../js/coi.js"></script>
+<pre id="log">starting…
+</pre>
+<script type="module">
+  import * as B from "../../js/bip32.js";
+  import * as H from "../../js/hash.js";
+  import { buildInputs, parsePublicInputs } from "../../js/noir-witness.js";
+  import { proveInBrowser, verifyInBrowser, threadCount } from "../../vendor/zk/zk-browser.js";
+  const log = (m) => { document.getElementById("log").textContent += m + "\n"; console.log(m); };
+  const q = new URLSearchParams(location.search);
+  window.benchResult = null;
+  try {
+    log(`crossOriginIsolated=${crossOriginIsolated} threads=${threadCount()}`);
+    const m = await B.masterFromSeed(H.hexToBytes("000102030405060708090a0b0c0d0e0f"));
+    const { inputs } = await buildInputs({
+      xpub: B.toXpubData(m), pathA: B.parsePath(q.get("a") || "0/1"), pathB: B.parsePath(q.get("b") || "1/3"),
+      contextHash: await H.sha256(new TextEncoder().encode("c")), expiresAt: 9999999999999,
+    });
+    const t0 = performance.now();
+    let last = 0;
+    const res = await proveInBrowser({
+      circuitUrl: "../../circuits/xproof.json", inputs,
+      onProgress: (s, d) => { if (s !== "bb" || performance.now() - last > 5000) { last = performance.now(); log(`[${((performance.now() - t0) / 1000).toFixed(0)}s] ${s}: ${d}`); } },
+    });
+    log(`witness ${(res.witnessMs / 1000).toFixed(1)}s · prove ${(res.proveMs / 1000).toFixed(1)}s · total ${((performance.now() - t0) / 1000).toFixed(1)}s · proof ${res.proof.length} B`);
+    log(JSON.stringify(parsePublicInputs(res.publicInputs)));
+    const v = await verifyInBrowser({ vkUrl: "../../circuits/xproof.vk", proof: res.proof, publicInputs: res.publicInputs });
+    const bad = [...res.publicInputs]; bad[0] = "0x" + "0".repeat(62) + "03";
+    const v2 = await verifyInBrowser({ vkUrl: "../../circuits/xproof.vk", proof: res.proof, publicInputs: bad });
+    log(`verify honest=${v.ok} (${(v.verifyMs / 1000).toFixed(1)}s) · verify tampered key_a=${v2.ok}`);
+    window.benchResult = { ok: true, ...res, proof: undefined, v: v.ok, v2: v2.ok };
+  } catch (e) {
+    log("ERROR " + (e.stack || e));
+    window.benchResult = { ok: false, error: String(e) };
+  }
+</script>

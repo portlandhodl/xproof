@@ -1,0 +1,19 @@
+{
+  "name": "xproof-noir",
+  "private": true,
+  "type": "module",
+  "description": "Noir circuit + browser (WASM) prover build for the GitHub Pages version of xproof.",
+  "devDependencies": {
+    "@aztec/bb.js": "^5.3.0",
+    "@noir-lang/noir_js": "^1.0.0-rc.7",
+    "@noir-lang/noir_wasm": "^1.0.0-rc.7",
+    "vite": "^6.4.5"
+  },
+  "scripts": {
+    "build:circuit": "node tools/build-circuit.mjs",
+    "build:web": "vite build -c web/vite.config.js",
+    "build": "npm run build:circuit && npm run build:web",
+    "test": "python3 tools/check-sha512-constants.py && node tools/test.mjs",
+    "test:quick": "python3 tools/check-sha512-constants.py && node tools/test.mjs --quick"
+  }
+}
