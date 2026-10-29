@@ -73,6 +73,7 @@ index.html, styles.css, js/   the web app (no framework)
   js/noir-witness.js          builds the Noir circuit witness + hints
   js/zk.js                    the "simulated" mode (teaching aid, not a proof)
 coi-sw.js, js/coi.js          cross-origin isolation for static hosting
+og.png, icon-512.png, …       social unfurl card + icons (sources in assets/, rendered at 1200×630)
 circuits/                     compiled Noir circuit, verification key, manifest (built)
 vendor/zk/                    bundled in-browser prover/verifier (built)
 noir/                         Noir circuit source, browser prover source, build + tests
@@ -134,7 +135,7 @@ On this machine the build needed a newer libstdc++ for SP1's toolchain
 ## Deploying to GitHub Pages
 
 `.github/workflows/pages.yml` publishes the static site (`index.html`, `styles.css`,
-`coi-sw.js`, `js/`, `vendor/`, `circuits/`) on every push to `main`. In the repo settings, set
+`coi-sw.js`, the card/icon PNGs, `js/`, `vendor/`, `circuits/`) on every push to `main`. In the repo settings, set
 Pages → Source to "GitHub Actions".
 
 ## Caveats
