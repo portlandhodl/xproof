@@ -97,7 +97,7 @@ export function parsePath(str) {
 export const formatPath = (path) => "m/" + path.join("/");
 
 // Walk a path from the xpub side. Returns the final node plus every intermediate
-// step (used by the prover trace and the tree view).
+// step (used by the tree view).
 export async function derivePathPub(xpub, path) {
   let node = { pubPoint: xpub.pubPoint, chain: xpub.chain };
   const steps = [];

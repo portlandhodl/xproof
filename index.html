@@ -152,14 +152,6 @@
           </div>
         </div>
 
-        <details class="mockchain">
-          <summary>No signet sats? Use the offline mock chain instead</summary>
-          <div class="row">
-            <input id="signMsg" value="Pay 0.25 BTC to 1DemoRecipientAddress" />
-            <button id="btnSign" class="btn" disabled>Sign mock tx</button>
-          </div>
-          <ul id="chainLog" class="chainlog"></ul>
-        </details>
       </div>
     </div>
   </section>
@@ -190,19 +182,9 @@
         (or a smart contract) with just the vk hash.</p>
         <button id="btnProveZk" class="btn" disabled>Prove on server</button>
       </div>
-      <div class="mode server-only hidden">
-        <div class="mode-head"><span class="tag tag-green">SP1 STARK</span><span class="dim">server · ≈1–2 min</span></div>
-        <p>The raw SP1 compressed STARK (~1.3 MB). Sound, but not zero-knowledge on its own. Paths up to depth 16.</p>
-        <button id="btnProveReal" class="btn" disabled>Prove on server</button>
-      </div>
-      <div class="mode">
-        <div class="mode-head"><span class="tag tag-amber">SIMULATED</span><span class="dim">instant</span></div>
-        <p>Runs the real relation check and emits a Fiat-Shamir-shaped envelope. For exploring the flow; not a proof.</p>
-        <button id="btnProve" class="btn" disabled>Simulate</button>
-      </div>
     </div>
-    <p id="serverNote" class="dim small">Self-hosting? Run the <code>xproof-host</code> server to also get SP1 STARK and
-    Groth16 provers (see README).</p>
+    <p id="serverNote" class="dim small">Self-hosting? Run the <code>xproof-host</code> server to also get the SP1 → Groth16
+    prover (paths up to depth 16; see README).</p>
     <div id="depthNote" class="note hidden"></div>
 
     <div id="realProgress" class="progress hidden">
@@ -219,11 +201,6 @@
         <div id="realMeta" class="dim"></div>
         <button id="btnDownload" class="btn btn-sm">Download proof</button>
       </div>
-    </div>
-    <div id="relationTrace"></div>
-    <div id="proofBox" class="hidden">
-      <h3>Simulated proof object <span class="dim">(this — and only this — goes to the verifier)</span></h3>
-      <pre id="proofJson" class="code"></pre>
     </div>
   </section>
 
@@ -267,7 +244,7 @@
     </div>
     <p class="dim small">Which proof to use: both <strong>ZK · in your browser</strong> (UltraHonk) and <strong>ZK · Groth16</strong>
     hide the witness and are constant-size, so they don't hint at path depth; the in-browser circuit even does the same
-    work for every path shape. SP1's raw STARK is sound but not zero-knowledge on its own — use it for debugging only.</p>
+    work for every path shape. Non-zero-knowledge and simulated proof modes are deliberately not offered.</p>
   </section>
 </main>
 

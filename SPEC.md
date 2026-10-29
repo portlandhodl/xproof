@@ -175,12 +175,9 @@ Source: `zkvm/program/src/main.rs` (guest), `zkvm/script/src/main.rs` (host). Th
 §3.1 directly in Rust (`hmac`, `sha2`, `k256` with SP1's secp256k1 precompile). It allows
 `MAX_DEPTH = 16`, derives a shared path prefix only once, and commits the journal (§3.2).
 
-| Mode | Zero-knowledge | Size | Verify with |
-|---|---|---|---|
-| `compressed` | **No** (the SP1 STARK alone isn't ZK) | ~1.3 MB | SP1 SDK + program vk |
-| `groth16` | Yes | 356 B | `sp1-verifier` (proof, journal, vk hash) or on-chain |
-
-The `compressed` mode MUST NOT be used where witness privacy matters.
+The host emits exactly one kind of proof: the SP1 STARK wrapped in a BN254 **Groth16** SNARK —
+zero-knowledge, 356 bytes, verifiable with `sp1-verifier` from (proof, journal, vk hash), or
+on-chain. A bare STARK MUST NOT be emitted: it is not zero-knowledge and can expose the witness.
 
 ## 6. Protocol
 
@@ -196,8 +193,6 @@ The `compressed` mode MUST NOT be used where witness privacy matters.
 { "mode": "noir",    "proof_hex": "…", "public_inputs": ["0x…" ×99], "vk_sha256": "…" }
 // SP1 Groth16
 { "mode": "groth16", "groth16_hex": "…", "journal_hex": "…(212 hex chars)" }
-// SP1 compressed STARK
-{ "mode": "real",    "receipt_hex": "…(bincode SP1ProofWithPublicValues)" }
 ```
 
 ### 6.3 Verification procedure
@@ -238,7 +233,7 @@ The verifier MUST NOT trust any prover-supplied transaction data.
 - **BIP32 non-hardened leakage.** Anyone who has the xpub **and** any non-hardened child private
   key can recover the parent private key. xproof exists so that the xpub never has to be shared.
 - **Trust in setup.** UltraHonk relies on the Ignition SRS (a 1-of-N trusted ceremony). SP1 Groth16
-  relies on Succinct's circuit-specific setup. The SP1 STARK is transparent.
+  relies on Succinct's circuit-specific setup.
 - **Demo hosting.** The in-browser prover keeps the witness inside the tab. The server modes send
   the xpub to the `xproof-host` process, so run it only on hardware you control.
 - **Network.** Signet only. The page's seed storage (localStorage) is not suitable for real funds.

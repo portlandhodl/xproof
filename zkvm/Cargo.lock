@@ -5724,7 +5724,6 @@ name = "xproof-host"
 version = "0.1.0"
 dependencies = [
  "axum",
- "bincode",
  "clap",
  "dotenv",
  "hex",

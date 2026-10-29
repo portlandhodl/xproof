@@ -8,7 +8,7 @@ xpub, its chain code, or the derivation paths**. Only the two keys become public
 
 - 📄 Formal specification: [SPEC.md](SPEC.md)
 - 🔐 Zero-knowledge proofs are generated **in the browser** (Noir → UltraHonk, WebAssembly)
-- 🖥️ An optional **self-hosted server** adds SP1 zkVM provers (STARK and Groth16)
+- 🖥️ An optional **self-hosted server** adds an SP1 zkVM → Groth16 prover (deeper paths)
 
 ## How it works (short version)
 
@@ -30,15 +30,18 @@ On the page, end to end:
 
 ## Provers
 
-| | In-browser (default) | Server: Groth16 | Server: STARK |
-|---|---|---|---|
-| Where it runs | your browser tab (WASM) | `xproof-host` | `xproof-host` |
-| Proving system | Noir + Barretenberg UltraHonk | SP1 zkVM → Groth16 | SP1 zkVM compressed STARK |
-| Zero-knowledge | ✅ | ✅ | ❌ (debug only) |
-| Proof size | 10.7 KB | 356 B | ~1.3 MB |
-| Max path depth | 3 | 16 | 16 |
-| Setup | universal (Aztec Ignition SRS) | SP1 Groth16 setup | transparent |
-| On-chain verifiable | ✅ (keccak transcript) | ✅ | — |
+| | In-browser (default) | Server: Groth16 |
+|---|---|---|
+| Where it runs | your browser tab (WASM) | `xproof-host` |
+| Proving system | Noir + Barretenberg UltraHonk | SP1 zkVM → Groth16 |
+| Zero-knowledge | ✅ | ✅ |
+| Proof size | 10.7 KB | 356 B |
+| Max path depth | 3 | 16 |
+| Setup | universal (Aztec Ignition SRS) | SP1 Groth16 setup |
+| On-chain verifiable | ✅ (keccak transcript) | ✅ |
+
+Only zero-knowledge proofs are offered. (A bare SP1 STARK is sound but not zero-knowledge —
+it can expose the witness — so the host always wraps it in Groth16.)
 
 Both proving stacks implement the same relation and public values (SPEC §3). Tests check
 that they derive identical keys.
@@ -52,7 +55,6 @@ Measured in headless Chromium on an 88-core server (one proof = 1.76M gates, 2^2
 | In-browser, 16 threads | **~65 s** (witness 6 s + proving 49 s) |
 | In-browser, 1 thread (no cross-origin isolation) | **~4.6 min** |
 | In-browser verification | < 1 s |
-| Server, SP1 STARK | ~85 s |
 | Server, SP1 → Groth16 | ~3.7 min (first run also downloads ~8 GB of circuit files) |
 
 A typical laptop should land between those browser numbers; phones may take several times
@@ -71,7 +73,6 @@ index.html, styles.css, js/   the web app (no framework)
   js/bip32.js, secp256k1.js   BIP32 + secp256k1 (BigInt, validated against BIP32 test vector 1)
   js/btc.js                   bech32, P2WPKH tx building/signing, BIP143, Esplora client
   js/noir-witness.js          builds the Noir circuit witness + hints
-  js/zk.js                    the "simulated" mode (teaching aid, not a proof)
 coi-sw.js, js/coi.js          cross-origin isolation for static hosting
 og.png, icon-512.png, …       social unfurl card + icons (sources in assets/, rendered at 1200×630)
 circuits/                     compiled Noir circuit, verification key, manifest (built)
@@ -102,8 +103,8 @@ isolation), and so does any static host.
 
 ## Running the server version (optional)
 
-The server serves this same page and enables the SP1 prover cards. In those modes the **xpub is
-sent to the server**, so only run it on a machine you control.
+The server serves this same page and enables the SP1 → Groth16 prover card. In that mode the
+**xpub is sent to the server**, so only run it on a machine you control.
 
 ```sh
 cd zkvm
@@ -117,16 +118,15 @@ The CLI also works on its own:
 ```sh
 xproof-host execute --parent-pub HEX --chain-code HEX --path-a 0/1 --path-b 1/3 \
     --context STR --expires-at MS                       # dry run, prints cycle count
-xproof-host prove   ... [--groth16] --out proof.hex     # real proof
+xproof-host prove   ... --out proof.hex                 # zero-knowledge proof (Groth16)
 xproof-host vkey                                        # program verifying-key hash
 ```
 
 HTTP API:
 
-- `POST /api/prove`: `{parent_pub, chain_code, path_a, path_b, context, expires_at, mode?}`,
-  where `mode` is `"compressed"` (default) or `"groth16"`. Returns
-  `{ok, mode, receipt_hex, journal_hex, vk_hex, elapsed_ms}`.
-- `POST /api/verify`: `{receipt_hex}` or `{groth16_hex, journal_hex}` → `{ok, journal_hex, error}`
+- `POST /api/prove`: `{parent_pub, chain_code, path_a, path_b, context, expires_at}` →
+  `{ok, mode, proof_hex, journal_hex, vk_hex, elapsed_ms}` (`mode` is always `"groth16"`).
+- `POST /api/verify`: `{groth16_hex, journal_hex}` → `{ok, journal_hex, error}`
 - `GET /api/info`: backend description, vk hash, max depth.
 
 On this machine the build needed a newer libstdc++ for SP1's toolchain
@@ -144,4 +144,3 @@ Pages → Source to "GitHub Actions".
 - A proof shows **knowledge of the xpub**, not spend authority. The on-chain anchor shows that
   key B has signed at some point. See SPEC §7 for the fresh-signature extension.
 - Proofs can be forwarded: anyone who has the file can verify the link.
-- The "simulated" mode is a teaching aid, not a proof.

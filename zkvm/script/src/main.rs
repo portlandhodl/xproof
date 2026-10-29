@@ -3,9 +3,11 @@
 //! Subcommands:
 //!   vkey                          print the program's verifying-key hash
 //!   execute  <witness args>       run the guest, report cycle count (no proof)
-//!   prove    <witness args>       generate a compressed STARK proof (or --groth16), write hex to --out
+//!   prove    <witness args>       generate a Groth16 proof (zero-knowledge), write hex to --out
 //!   serve    --port N             HTTP API + serves the web demo
 //!
+//! Only zero-knowledge proofs are produced: the SP1 STARK is always wrapped in Groth16.
+//! (A bare SP1 STARK is not zero-knowledge and would expose the witness.)
 //! Witness args: --parent-pub HEX(33B) --chain-code HEX(32B) --path-a 0/1 --path-b 1/3
 //!               --context STR --expires-at MS
 //! Paths are relative to the hidden xpub, non-hardened only ("m/" prefix optional).
@@ -18,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use sp1_sdk::{
     blocking::{EnvProver, EnvProvingKey, ProveRequest, Prover, ProverClient},
-    include_elf, Elf, HashableKey, ProvingKey, SP1ProofWithPublicValues, SP1Stdin,
+    include_elf, Elf, HashableKey, ProvingKey, SP1Stdin,
 };
 
 /// The guest ELF, built by build.rs.
@@ -54,8 +56,6 @@ struct ProveArgs {
     #[command(flatten)]
     w: WitnessArgs,
     #[arg(long)] out: Option<String>,
-    /// Wrap the STARK in a Groth16 SNARK (zero-knowledge, 356 bytes). Needs Docker.
-    #[arg(long)] groth16: bool,
 }
 
 #[derive(clap::Args)]
@@ -123,30 +123,21 @@ fn setup() -> (EnvProver, EnvProvingKey) {
     (client, pk)
 }
 
-/// Prove + immediately verify against the vk (so we never hand out a bad proof).
+/// Prove + immediately verify (so we never hand out a bad proof).
 ///
-/// Returns `(proof_bytes, journal_hex)`. For the compressed STARK the bytes are the full
-/// bincode receipt (~1.3 MB, not zero-knowledge on its own). For Groth16 they are the
-/// on-chain-style SNARK bytes (356 B): the STARK is recursively wrapped in a BN254 Groth16
-/// proof, which is zero-knowledge and verifiable with just (bytes, journal, vk hash).
-fn do_prove(client: &EnvProver, pk: &EnvProvingKey, w: &WitnessArgs, groth16: bool) -> Result<(Vec<u8>, String), String> {
+/// Returns `(proof_bytes, journal_hex)`. The SP1 STARK is recursively wrapped in a BN254
+/// Groth16 proof: zero-knowledge, 356 bytes, verifiable with just (bytes, journal, vk hash).
+fn do_prove(client: &EnvProver, pk: &EnvProvingKey, w: &WitnessArgs) -> Result<(Vec<u8>, String), String> {
     let stdin = build_stdin(w)?;
-    let req = client.prove(pk, stdin);
-    let proof = if groth16 { req.groth16() } else { req.compressed() }
-        .run()
-        .map_err(|e| e.to_string())?;
+    let proof = client.prove(pk, stdin).groth16().run().map_err(|e| e.to_string())?;
     client
         .verify(&proof, pk.verifying_key(), None)
         .map_err(|e| e.to_string())?;
     let journal = proof.public_values.as_slice().to_vec();
-    if groth16 {
-        let bytes = proof.bytes();
-        // Belt and braces: the standalone verifier must accept exactly what we hand out.
-        verify_groth16(&bytes, &journal, &pk.verifying_key().bytes32())?;
-        return Ok((bytes, hex::encode(journal)));
-    }
-    let blob = bincode::serialize(&proof).map_err(|e| e.to_string())?;
-    Ok((blob, hex::encode(journal)))
+    let bytes = proof.bytes();
+    // Belt and braces: the standalone verifier must accept exactly what we hand out.
+    verify_groth16(&bytes, &journal, &pk.verifying_key().bytes32())?;
+    Ok((bytes, hex::encode(journal)))
 }
 
 /// Standalone Groth16 check — the same thing a smart contract or a third party would run.
@@ -162,7 +153,7 @@ fn execute(w: &WitnessArgs) {
         eprintln!("bad witness: {e}");
         std::process::exit(2);
     });
-    let mut req = client.execute(XPROOF_ELF, stdin);
+    let req = client.execute(XPROOF_ELF, stdin);
     let (public, report) = req.run().expect("execute failed");
     println!("journal: {}", hex::encode(public.as_slice()));
     println!("cycles: {}", report.total_instruction_count());
@@ -182,7 +173,7 @@ fn main() {
         Cmd::Prove(a) => {
             let (client, pk) = setup();
             let t0 = Instant::now();
-            match do_prove(&client, &pk, &a.w, a.groth16) {
+            match do_prove(&client, &pk, &a.w) {
                 Ok((blob, journal_hex)) => {
                     println!("journal: {journal_hex}");
                     println!("proof_bytes: {}", blob.len());
@@ -224,7 +215,7 @@ struct ProveReq {
     index_b: Option<u32>,
     context: String,
     expires_at: u64,
-    /// "compressed" (default, STARK) or "groth16" (ZK-wrapped SNARK).
+    /// Must be "groth16" if present (the only mode; kept for API compatibility).
     mode: Option<String>,
 }
 
@@ -237,19 +228,18 @@ fn req_path(path: Option<String>, index: Option<u32>, which: &str) -> Result<Str
 struct ProveResp {
     ok: bool,
     mode: String,
-    receipt_hex: Option<String>,
+    proof_hex: Option<String>,
     journal_hex: Option<String>,
     vk_hex: String,
     elapsed_ms: u128,
     error: Option<String>,
 }
 
-/// Either a compressed STARK receipt, or Groth16 proof bytes + the claimed journal.
+/// Groth16 proof bytes + the claimed journal.
 #[derive(Deserialize)]
 struct VerifyReq {
-    receipt_hex: Option<String>,
-    groth16_hex: Option<String>,
-    journal_hex: Option<String>,
+    groth16_hex: String,
+    journal_hex: String,
 }
 
 #[derive(Serialize)]
@@ -280,9 +270,9 @@ async fn serve(s: &ServeArgs) {
                 async move {
                     Json(serde_json::json!({
                         "vk_hex": st.vk_hex,
-                        "backend": "SP1 compressed STARK, CPU prover (Rust)",
+                        "backend": "SP1 zkVM → Groth16, CPU prover (Rust)",
                         "max_depth": xproof_lib::MAX_DEPTH,
-                        "modes": ["compressed", "groth16"],
+                        "modes": ["groth16"],
                     }))
                 }
             }
@@ -295,9 +285,12 @@ async fn serve(s: &ServeArgs) {
                     let t0 = Instant::now();
                     let vk_hex = st.vk_hex.clone();
                     let st2 = st.clone();
-                    let groth16 = req.mode.as_deref() == Some("groth16");
-                    let mode = if groth16 { "groth16" } else { "compressed" }.to_string();
+                    let mode = "groth16".to_string();
+                    let bad_mode = req.mode.as_deref().is_some_and(|m| m != "groth16");
                     let result = tokio::task::spawn_blocking(move || {
+                        if bad_mode {
+                            return Err("only mode \"groth16\" is supported (non-ZK proofs are disabled)".to_string());
+                        }
                         let w = WitnessArgs {
                             parent_pub: req.parent_pub,
                             chain_code: req.chain_code,
@@ -306,7 +299,7 @@ async fn serve(s: &ServeArgs) {
                             context: req.context,
                             expires_at: req.expires_at,
                         };
-                        do_prove(&st2.client, &st2.pk, &w, groth16)
+                        do_prove(&st2.client, &st2.pk, &w)
                     })
                     .await
                     .map_err(|e| e.to_string());
@@ -317,7 +310,7 @@ async fn serve(s: &ServeArgs) {
                             Json(ProveResp {
                                 ok: true,
                                 mode: mode.clone(),
-                                receipt_hex: Some(hex::encode(&blob)),
+                                proof_hex: Some(hex::encode(&blob)),
                                 journal_hex: Some(journal_hex),
                                 vk_hex: vk_hex.clone(),
                                 elapsed_ms: t0.elapsed().as_millis(),
@@ -327,7 +320,7 @@ async fn serve(s: &ServeArgs) {
                         Ok(Err(e)) | Err(e) => (
                             StatusCode::BAD_REQUEST,
                             Json(ProveResp {
-                                ok: false, mode: mode.clone(), receipt_hex: None, journal_hex: None,
+                                ok: false, mode: mode.clone(), proof_hex: None, journal_hex: None,
                                 vk_hex: vk_hex.clone(),
                                 elapsed_ms: t0.elapsed().as_millis(),
                                 error: Some(e),
@@ -345,21 +338,10 @@ async fn serve(s: &ServeArgs) {
                     let vk_hex = st.vk_hex.clone();
                     let st2 = st.clone();
                     let result = tokio::task::spawn_blocking(move || {
-                        if let Some(g) = &req.groth16_hex {
-                            let proof = hex::decode(g).map_err(|e| e.to_string())?;
-                            let journal_hex = req.journal_hex.clone().ok_or("missing journal_hex")?;
-                            let journal = hex::decode(&journal_hex).map_err(|e| e.to_string())?;
-                            verify_groth16(&proof, &journal, &st2.vk_hex)?;
-                            return Ok(journal_hex);
-                        }
-                        let receipt = req.receipt_hex.as_ref().ok_or("missing receipt_hex or groth16_hex")?;
-                        let blob = hex::decode(receipt).map_err(|e| e.to_string())?;
-                        let proof: SP1ProofWithPublicValues =
-                            bincode::deserialize(&blob).map_err(|e| e.to_string())?;
-                        st2.client
-                            .verify(&proof, st2.pk.verifying_key(), None)
-                            .map_err(|e| e.to_string())?;
-                        Ok::<String, String>(hex::encode(proof.public_values.as_slice()))
+                        let proof = hex::decode(&req.groth16_hex).map_err(|e| e.to_string())?;
+                        let journal = hex::decode(&req.journal_hex).map_err(|e| e.to_string())?;
+                        verify_groth16(&proof, &journal, &st2.vk_hex)?;
+                        Ok::<String, String>(req.journal_hex)
                     })
                     .await
                     .map_err(|e| e.to_string());

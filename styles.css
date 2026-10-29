@@ -262,13 +262,6 @@ textarea { min-height: 160px; margin-top: 14px; resize: vertical; }
 
 .signbox { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 18px; }
 .signbox label { color: var(--dim); font-size: 13.5px; }
-.chainlog { list-style: none; padding: 0; margin: 10px 0 0; }
-.chainlog li {
-  display: flex; gap: 10px; align-items: baseline;
-  border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; margin-top: 8px;
-  font: 12.5px var(--mono); word-break: break-all; background: rgba(0, 0, 0, 0.2); animation: rise 0.3s ease-out;
-}
-.chainlog .blk { color: var(--dim); flex-shrink: 0; }
 
 /* ---- step 2 -------------------------------------------------------------- */
 
@@ -299,16 +292,6 @@ pre.code {
   max-height: 360px; color: #ddd6fe;
 }
 
-.trace { margin-top: 18px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.trace div {
-  padding: 7px 12px; font: 12.5px var(--mono); border-bottom: 1px solid var(--border);
-  word-break: break-all; display: flex; gap: 10px;
-}
-.trace div:last-child { border-bottom: 0; }
-.trace div:nth-child(odd) { background: rgba(255, 255, 255, 0.02); }
-.trace .val { color: var(--dim); margin-left: auto; flex-shrink: 0; }
-.trace .tA { color: var(--a); }
-.trace .tB { color: var(--b); }
 
 /* ---- step 3 -------------------------------------------------------------- */
 
@@ -333,6 +316,7 @@ pre.code {
 }
 #verdict.pass { background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.5); color: var(--green); box-shadow: 0 0 40px rgba(52, 211, 153, 0.12); }
 #verdict.fail { background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.5); color: var(--red); }
+#verdict.partial { background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.45); color: var(--amber); }
 
 /* ---- explainer ----------------------------------------------------------- */
 
@@ -390,6 +374,5 @@ a { color: var(--accent-2); }
   border: 1px solid rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.06);
   border-radius: 10px; padding: 10px 14px; font-size: 13.5px; word-break: break-all;
 }
-.mockchain, .restore { margin-top: 14px; color: var(--dim); font-size: 13.5px; }
-.mockchain summary, .restore summary { cursor: pointer; user-select: none; }
-.restore { margin-top: 12px; }
+.restore { margin-top: 12px; color: var(--dim); font-size: 13.5px; }
+.restore summary { cursor: pointer; user-select: none; }
